@@ -73,7 +73,7 @@ sayBye :: Client -> IORef [Client] -> IO ()
 sayBye = sayWith $ sayForClient " has left"
 
 finalize :: Client -> IORef [Client] -> IO ()
-finalize c@(Client _ hC) cRef = sayBye c cRef >> hClose hC >> removeClient c cRef
+finalize c@(Client _ hC) cRef = hClose hC >> removeClient c cRef >> sayBye c cRef
 
 chatLoop :: Socket -> IO ()
 chatLoop socket = newIORef ([] :: [Client]) >>= (\cRef -> mapM_ (getConnection cRef) [1..])
