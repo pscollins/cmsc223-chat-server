@@ -16,9 +16,7 @@ data Client = Client {idx :: Int, hClient :: Handle} deriving (Show, Eq)
 
 -- atomicModifyIORef saves us from a lock here
 addClient :: Client -> IORef [Client] -> IO ()
-addClient client clientsRef = doChange >> return ()
-  where doChange = atomicModifyIORef clientsRef mkClients
-        mkClients clients = (clients, client:clients)
+addClient c clientsRef = atomicModifyIORef clientsRef $ \cs -> (c:cs, ())
 
 prefixMessage :: Client -> String -> String
 prefixMessage (Client idxNum _) = (((show idxNum) ++ ": ") ++)
@@ -30,19 +28,22 @@ otherClients (Client idxNum _) clients =
 tellClient :: String -> Client -> IO ()
 tellClient = flip $ hPutStrLn . hClient
 
+askClient :: Client -> IO (String)
+askClient = hGetLine . hClient
+
 -- We split this out for the sake of unit testing
 talkAction :: (String -> String) -> (IORef [Client] -> IO [Client])
-              -> IORef [Client] ->  Handle -> IO ()
-talkAction prefixMe everyoneElse currentClients hndl = do
-  toSay <- hGetLine hndl >>= return . prefixMe
+              -> IORef [Client] -> Client -> IO ()
+talkAction prefixMe everyoneElse currentClients me = do
+  toSay <- askClient me >>= return . prefixMe
   putStrLn $ "About to say: " ++ toSay
   everyoneElse currentClients >>= mapM_ (tellClient toSay)
 
 talk :: Client -> IORef [Client] -> IO ()
-talk client@(Client _ hndl) currentClients = doTalk
-  where prefixMe = prefixMessage client
-        everyoneElse = otherClients client
-        doTalk = forever $ talkAction prefixMe everyoneElse currentClients hndl
+talk me currentClients = doTalk
+  where prefixMe = prefixMessage me
+        everyoneElse = otherClients me
+        doTalk = forever $ talkAction prefixMe everyoneElse currentClients me
 
 chatLoop :: Socket -> IO ()
 chatLoop socket = loop [1..]
@@ -55,7 +56,7 @@ chatLoop socket = loop [1..]
       (handle, hostName, _) <- accept socket
       putStrLn $ "Got a client from host " ++ hostName
       currentClients <- currentClients'
-      hSetBuffering handle LineBuffering
+      hSetBuffering handle NoBuffering
       let newClient = Client clientIdx handle
       addClient newClient currentClients
       newThIdx <-

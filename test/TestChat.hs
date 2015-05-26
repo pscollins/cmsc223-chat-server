@@ -2,9 +2,10 @@
 module Main (main) where
 
 import Test.Hspec
-import Test.QuickCheck
 
 import System.IO.Temp
+import System.IO
+import System.IO.Error
 import Data.IORef
 import System.Directory
 
@@ -28,16 +29,14 @@ withTempClients idxs f = do
   mapM_ removeFile paths
   return res
 
-testPrefixMessage :: Spec
-testPrefixMessage =
+main :: IO ()
+main = hspec $ describe "Testing Lab 2" $ do
   describe "prefix message" $ do
     it "prefixes 1" $ withTempClient 1 $ \c -> do
       prefixMessage c "hello" `shouldBe` "1: hello"
     it "prefixes 2" $ withTempClient 2 $ \c -> do
       prefixMessage c "hello" `shouldBe` "2: hello"
 
-testOtherClients :: Spec
-testOtherClients =
   describe "other clients" $ do
     it "ignores itself" $ withTempClients [1..3] $ \cs@[c1, c2, c3] -> do
       cRef <- newIORef cs
@@ -45,8 +44,6 @@ testOtherClients =
       otherClients c2 cRef `shouldReturn` [c1, c3]
       otherClients c3 cRef `shouldReturn` [c1, c2]
 
-testAddClient :: Spec
-testAddClient =
   describe "add client" $ do
     it "adds a client" $ withTempClient 1 $ \c -> do
       cRef <- newIORef ([] :: [Client])
@@ -54,9 +51,13 @@ testAddClient =
       addClient c cRef
       readIORef cRef `shouldReturn` [c]
 
-
-main :: IO ()
-main = hspec $ describe "Testing Lab 2" $ do
-  testPrefixMessage
-  testOtherClients
-  testAddClient
+  describe "client IO" $ do
+    it "can't ask an empty client" $ withTempClient 1 $ \c-> do
+      askClient c `shouldThrow` isEOFError
+    it "opens a handle corectly" $ withTempClient 1 $ \(Client _ h) -> do
+      hIsOpen h `shouldReturn` True
+      hIsWritable h `shouldReturn` True
+    it "can ask and tell" $ withTempClient 1 $ \c -> do
+      tellClient "hello" c
+      hFlush $ hClient c
+      askClient c `shouldReturn` "hello"
