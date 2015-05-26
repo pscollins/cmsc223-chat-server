@@ -35,6 +35,9 @@ withTempClients idxs f = do
 tellClient' :: String -> Client -> IO ()
 tellClient' s c@(Client _ h) = tellClient s c >> hSeek h AbsoluteSeek 0
 
+rewind :: [Client] -> IO ()
+rewind cs = mapM_ (\(Client _ h) -> hSeek h AbsoluteSeek 0) cs
+
 main :: IO ()
 main = hspec $ describe "Testing Lab 2" $ do
   describe "prefix message" $ do
@@ -69,6 +72,26 @@ main = hspec $ describe "Testing Lab 2" $ do
       readIORef cRef `shouldReturn` [c2]
       removeClient c2 cRef
       readIORef cRef `shouldReturn` []
+
+  let expectS s c = askClient c `shouldReturn` s
+
+  describe "client greetings" $ do
+    it "says bye" $ withTempClients [1..3] $ \cs -> do
+      cRef <- newIORef cs
+      readIORef cRef >>= mapM_ (\me -> sayBye me cRef)
+      readIORef cRef >>= rewind
+      readIORef cRef >>= mapM_ (expectS "1 has left")
+      readIORef cRef >>= mapM_ (expectS "2 has left")
+      readIORef cRef >>= mapM_ (expectS "3 has left")
+    it "says hi" $ withTempClients [1..3] $ \cs -> do
+      cRef <- newIORef cs
+      readIORef cRef >>= mapM_ (\me -> sayHi me cRef)
+      readIORef cRef >>= rewind
+      readIORef cRef >>= mapM_ (expectS "1 has joined")
+      readIORef cRef >>= mapM_ (expectS "2 has joined")
+      readIORef cRef >>= mapM_ (expectS "3 has joined")
+
+
 
   describe "client IO" $ do
     it "can't ask an empty client" $ withTempClient 1 $ \c-> do

@@ -57,19 +57,37 @@ talk me currentClients = doTalk
         everyoneElse = otherClients me
         doTalk = forever $ talkAction prefixMe everyoneElse currentClients me
 
+tellAll :: String -> IORef [Client] -> IO ()
+tellAll msg cRef = readIORef cRef >>= mapM_ (tellClient msg)
+
+sayForClient :: String -> Client -> String
+sayForClient msg (Client cIdx _) = show cIdx ++ msg
+
+sayWith :: (Client -> String) -> Client -> IORef [Client] -> IO ()
+sayWith = (tellAll .)
+
+sayHi :: Client -> IORef [Client] -> IO ()
+sayHi = sayWith $ sayForClient " has joined"
+
+sayBye :: Client -> IORef [Client] -> IO ()
+sayBye = sayWith $ sayForClient " has left"
+
+finalize :: Client -> IORef [Client] -> IO ()
+finalize c@(Client _ hC) cRef = sayBye c cRef >> hClose hC >> removeClient c cRef
+
 chatLoop :: Socket -> IO ()
 chatLoop socket = newIORef ([] :: [Client]) >>= (\cRef -> mapM_ (getConnection cRef) [1..])
   where
-    getConnection currentClients clientIdx = do
+    getConnection cRef clientIdx = do
       putStrLn $ "About to connect to client" ++ (show clientIdx)
       (handle, hostName, _) <- accept socket
       putStrLn $ "Got a client from host " ++ hostName
       hSetBuffering handle NoBuffering
       let newClient = Client clientIdx handle
-      addClient newClient currentClients
-      readIORef currentClients >>= putStrLn . show
+      addClient newClient cRef
+      sayHi newClient cRef
       newThIdx <-
-        forkFinally (talk newClient currentClients) (\_ -> hClose handle)
+        forkFinally (talk newClient cRef) (\_ -> finalize newClient cRef)
       putStrLn $ "Forked thread " ++ show newThIdx
 
 chatOnPort :: Int -> IO ()
