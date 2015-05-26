@@ -9,6 +9,7 @@ import System.IO.Error
 import Data.IORef
 import System.Directory
 import System.Posix.Env
+import Control.Concurrent
 
 import Chat
 
@@ -55,6 +56,8 @@ main = hspec $ describe "Testing Lab 2" $ do
       readIORef cRef `shouldReturn` []
       addClient c cRef
       readIORef cRef `shouldReturn` [c]
+      addClient c cRef
+      readIORef cRef `shouldReturn` [c, c]
 
   describe "client IO" $ do
     it "can't ask an empty client" $ withTempClient 1 $ \c-> do
@@ -71,12 +74,18 @@ main = hspec $ describe "Testing Lab 2" $ do
       setEnv "CHAT_SERVER_PORT" "5050" True
       getPort `shouldReturn` 5050
 
-  describe "talking between clients" $
-    -- it "should not have talked before talking" $ do
-    --   mapM_ (\c -> askClient c `shouldThrow` isEOFError) cs
+  describe "talking between clients" $ do
     it "should talk to others" $ withTempClients [1..3] $ \cs@[c1, c2, c3] -> do
       cRef <- newIORef cs
       tellClient' "hello world" c1
       talkAction' tellClient' (prefixMessage c1) (otherClients c1) cRef c1
       askClient c1 `shouldThrow` isEOFError
+      mapM_ (\c -> askClient c `shouldReturn` "1: hello world") [c2, c3]
+
+    it "should work in other threads" $ withTempClients [1..3] $ \cs@[c1, c2, c3] -> do
+      cRef <- newIORef cs
+      tellClient' "hello world" c1
+      forkIO $ talk c1 cRef
+      threadDelay 1000
+      mapM_ (\(Client _ h) -> hSeek h AbsoluteSeek 0) cs
       mapM_ (\c -> askClient c `shouldReturn` "1: hello world") [c2, c3]

@@ -52,23 +52,19 @@ talk me currentClients = doTalk
         doTalk = forever $ talkAction prefixMe everyoneElse currentClients me
 
 chatLoop :: Socket -> IO ()
-chatLoop socket = loop [1..]
+chatLoop socket = newIORef ([] :: [Client]) >>= (\cRef -> mapM_ (getConnection cRef) [1..])
   where
-    currentClients' :: IO (IORef [Client])
-    currentClients' = newIORef ([] :: [Client])
-    loop [] = return ()         -- Suppress warning
-    loop (clientIdx:idxs) = do
+    getConnection currentClients clientIdx = do
       putStrLn $ "About to connect to client" ++ (show clientIdx)
       (handle, hostName, _) <- accept socket
       putStrLn $ "Got a client from host " ++ hostName
-      currentClients <- currentClients'
       hSetBuffering handle NoBuffering
       let newClient = Client clientIdx handle
       addClient newClient currentClients
+      readIORef currentClients >>= putStrLn . show
       newThIdx <-
         forkFinally (talk newClient currentClients) (\_ -> hClose handle)
       putStrLn $ "Forked thread " ++ show newThIdx
-      loop idxs
 
 chatOnPort :: Int -> IO ()
 chatOnPort port = withSocketsDo $ do
