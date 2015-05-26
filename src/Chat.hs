@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 -- | CS240h Lab 2 Chat Server
-module Chat (chat) where
+module Chat where
 
 import Network
 import Control.Concurrent (forkFinally)
@@ -12,14 +12,13 @@ import Control.Monad (forever)
 -- Note that we *dont* need any locks on our handle since GHC gives
 -- them to us already
 -- http://hackage.haskell.org/package/base-4.3.1.0/docs/src/GHC-IO-Handle-Types.html
-data Client = Client {idx :: Int, hClient :: Handle} deriving Show
+data Client = Client {idx :: Int, hClient :: Handle} deriving (Show, Eq)
 
 -- atomicModifyIORef saves us from a lock here
-addNewClient :: Client -> IORef [Client] -> IO ()
-addNewClient client clientsRef = doChange >> return ()
+addClient :: Client -> IORef [Client] -> IO ()
+addClient client clientsRef = doChange >> return ()
   where doChange = atomicModifyIORef clientsRef mkClients
         mkClients clients = (clients, client:clients)
-
 
 prefixMessage :: Client -> String -> String
 prefixMessage (Client idxNum _) = (((show idxNum) ++ ": ") ++)
@@ -58,7 +57,7 @@ chatLoop socket = loop [1..]
       currentClients <- currentClients'
       hSetBuffering handle LineBuffering
       let newClient = Client clientIdx handle
-      addNewClient newClient currentClients
+      addClient newClient currentClients
       newThIdx <-
         forkFinally (talk newClient currentClients) (\_ -> hClose handle)
       putStrLn $ "Forked thread " ++ show newThIdx
