@@ -18,12 +18,18 @@ data Client = Client {idx :: Int, hClient :: Handle} deriving (Show, Eq)
 addClient :: Client -> IORef [Client] -> IO ()
 addClient c clientsRef = atomicModifyIORef clientsRef $ \cs -> (c:cs, ())
 
+removeClient :: Client -> IORef [Client] -> IO ()
+removeClient c clientsRef = atomicModifyIORef clientsRef $ \cs -> (notMe c cs, ())
+
 prefixMessage :: Client -> String -> String
 prefixMessage (Client idxNum _) = (((show idxNum) ++ ": ") ++)
 
+notMe :: Client -> [Client] -> [Client]
+notMe (Client idxNum _) = filter ((idxNum /=) . idx)
+
 otherClients :: Client -> IORef [Client] -> IO [Client]
-otherClients (Client idxNum _) clients =
-  readIORef clients >>= return . filter ((idxNum /=) . idx)
+otherClients c clients =
+  readIORef clients >>= return . (notMe c)
 
 tellClient :: String -> Client -> IO ()
 tellClient = flip $ hPutStrLn . hClient

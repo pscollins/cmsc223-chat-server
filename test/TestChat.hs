@@ -50,7 +50,7 @@ main = hspec $ describe "Testing Lab 2" $ do
       otherClients c2 cRef `shouldReturn` [c1, c3]
       otherClients c3 cRef `shouldReturn` [c1, c2]
 
-  describe "add client" $ do
+  describe "client CRUD" $ do
     it "adds a client" $ withTempClient 1 $ \c -> do
       cRef <- newIORef ([] :: [Client])
       readIORef cRef `shouldReturn` []
@@ -58,6 +58,17 @@ main = hspec $ describe "Testing Lab 2" $ do
       readIORef cRef `shouldReturn` [c]
       addClient c cRef
       readIORef cRef `shouldReturn` [c, c]
+    it "removes a client" $ withTempClients [1, 2] $ \[c1, c2] -> do
+      cRef <- newIORef ([] :: [Client])
+      readIORef cRef `shouldReturn` []
+      addClient c1 cRef
+      readIORef cRef `shouldReturn` [c1]
+      addClient c2 cRef
+      readIORef cRef `shouldReturn` [c2, c1]
+      removeClient c1 cRef
+      readIORef cRef `shouldReturn` [c2]
+      removeClient c2 cRef
+      readIORef cRef `shouldReturn` []
 
   describe "client IO" $ do
     it "can't ask an empty client" $ withTempClient 1 $ \c-> do
