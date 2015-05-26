@@ -8,6 +8,7 @@ import System.IO
 import System.IO.Error
 import Data.IORef
 import System.Directory
+import System.Posix.Env
 
 import Chat
 
@@ -21,6 +22,7 @@ withTempClient :: Int -> (Client -> IO a) -> IO a
 withTempClient cIdx f = withTempFile tempHandleDir tempHandlePattern axn
   where axn _ handle = f $ Client cIdx handle
 
+-- FIXME: use Exception.bracket
 withTempClients :: [Int] -> ([Client] -> IO a) -> IO a
 withTempClients idxs f = do
   (paths, handles) <-
@@ -28,6 +30,9 @@ withTempClients idxs f = do
   res <- f $ zipWith Client idxs handles
   mapM_ removeFile paths
   return res
+
+tellClient' :: String -> Client -> IO ()
+tellClient' s c@(Client _ h) = tellClient s c >> hSeek h AbsoluteSeek 0
 
 main :: IO ()
 main = hspec $ describe "Testing Lab 2" $ do
@@ -58,6 +63,20 @@ main = hspec $ describe "Testing Lab 2" $ do
       hIsOpen h `shouldReturn` True
       hIsWritable h `shouldReturn` True
     it "can ask and tell" $ withTempClient 1 $ \c -> do
-      tellClient "hello" c
-      hFlush $ hClient c
+      tellClient' "hello" c
       askClient c `shouldReturn` "hello"
+
+  describe "find the port" $ do
+    it "can read from the environment" $ do
+      setEnv "CHAT_SERVER_PORT" "5050" True
+      getPort `shouldReturn` 5050
+
+  describe "talking between clients" $
+    -- it "should not have talked before talking" $ do
+    --   mapM_ (\c -> askClient c `shouldThrow` isEOFError) cs
+    it "should talk to others" $ withTempClients [1..3] $ \cs@[c1, c2, c3] -> do
+      cRef <- newIORef cs
+      tellClient' "hello world" c1
+      talkAction' tellClient' (prefixMessage c1) (otherClients c1) cRef c1
+      askClient c1 `shouldThrow` isEOFError
+      mapM_ (\c -> askClient c `shouldReturn` "1: hello world") [c2, c3]

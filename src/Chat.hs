@@ -32,12 +32,18 @@ askClient :: Client -> IO (String)
 askClient = hGetLine . hClient
 
 -- We split this out for the sake of unit testing
-talkAction :: (String -> String) -> (IORef [Client] -> IO [Client])
-              -> IORef [Client] -> Client -> IO ()
-talkAction prefixMe everyoneElse currentClients me = do
+talkAction' :: (String -> Client -> IO ()) -> (String -> String)
+               -> (IORef [Client] -> IO [Client])
+               -> IORef [Client] -> Client -> IO ()
+talkAction' doTell prefixMe everyoneElse currentClients me = do
   toSay <- askClient me >>= return . prefixMe
   putStrLn $ "About to say: " ++ toSay
-  everyoneElse currentClients >>= mapM_ (tellClient toSay)
+  everyoneElse currentClients >>= mapM_ (doTell toSay)
+
+talkAction :: (String -> String)
+              -> (IORef [Client] -> IO [Client])
+              -> IORef [Client] -> Client -> IO ()
+talkAction = talkAction' tellClient
 
 talk :: Client -> IORef [Client] -> IO ()
 talk me currentClients = doTalk
