@@ -1,0 +1,5 @@
+.cabal
+dist
+*.sandbox.config
+.cabal-sandbox
+tests/generated/*.tmp
