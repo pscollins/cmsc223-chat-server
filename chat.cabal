@@ -41,19 +41,3 @@ test-suite test-chat
               , unix
   default-language: Haskell2010
   ghc-options: -Wall
-
-
-test-suite integration-test
-  hs-source-dirs: test
-  main-is: IntegrationTest.hs
-  type: exitcode-stdio-1.0
-  build-depends:
-                base < 5
-              , chat
-              , hspec
-              , QuickCheck > 2.5
-              , temporary
-              , directory
-              , unix
-  default-language: Haskell2010
-  ghc-options: -Wall
