@@ -1,15 +1,22 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 -- | Author: Patrick Collins
 -- Purpose: Simple TCP chat server.
+-- Note that we export everything from this module on purpose
+-- because the only reason we factored it out in to a separate file
+-- was so that we could test it either. Our only user is the Main.hs
+-- file in the directory above us, we are not intended to be used as a
+-- library, so there is no reason to keep our interface narrow. We
+-- only have one friend, and we tell him everything.
+-- We break our code up in to many small, reusable functions for the
+-- sake of testing, because **untestable code is bad code.**
 module Chat where
 
 import Control.Concurrent (forkFinally)
 import Control.Monad (forever)
 import Data.IORef
 import Network
-import System.Environment (getEnv)
+import System.Environment (lookupEnv)
 import System.IO
-
 
 -- | Data type for clients connected to the server.
 -- Note that we *dont* need any locks on our handle since GHC gives
@@ -30,7 +37,6 @@ removeClient c clientsRef =
 -- | Generate the "<C.username>: " message prefix.
 prefixMessage :: Client -> String -> String
 prefixMessage = (++) . (sayForClient ": ")
--- prefixMessage (Client idxNum _) = (((show idxNum) ++ ": ") ++)
 
 -- | Grab every client from a list of clients except for the current
 -- one.
@@ -51,19 +57,18 @@ askClient :: Client -> IO (String)
 askClient = hGetLine . hClient
 
 -- | Perform one step of the client's event loop (i.e. recieve a
--- message and echo it to the other clients.)
--- We split it out for the sake of unit testing
+-- message and echo it to the other clients.) We split it out for the
+-- sake of unit testing.
 talkAction' :: (String -> Client -> IO ()) -> (String -> String)
                -> (IORef [Client] -> IO [Client])
                -> IORef [Client] -> Client -> IO ()
 talkAction' doTell prefixMe everyoneElse currentClients me = do
   toSay <- askClient me >>= return . prefixMe
-  putStrLn $ "About to say: " ++ toSay
   everyoneElse currentClients >>= mapM_ (doTell toSay)
 
--- | We need to use a version of tellClient that rewinds the file
--- handle when we unit test, but our "real code" will only ever call
--- this.
+-- | We need to be able to make a version of tellClient that rewinds
+-- the file handle when we unit test, but our "real code" will only
+-- ever call this.
 talkAction :: (String -> String)
               -> (IORef [Client] -> IO [Client])
               -> IORef [Client] -> Client -> IO ()
@@ -106,19 +111,17 @@ finalize c@(Client _ hC) cRef = hClose hC >> removeClient c cRef >> sayBye c cRe
 
 -- | Main loop for the chat server.
 chatLoop :: Socket -> IO ()
-chatLoop socket = newIORef ([] :: [Client]) >>= (\cRef -> mapM_ (getConnection cRef) [1..])
+chatLoop socket = mkCRef >>= (\cRef -> mapM_ (getConnection cRef) [1..])
   where
+    mkCRef = newIORef ([] :: [Client])
     getConnection cRef clientIdx = do
-      putStrLn $ "About to connect to client" ++ (show clientIdx)
-      (handle, hostName, _) <- accept socket
-      putStrLn $ "Got a client from host " ++ hostName
+      (handle, _, _) <- accept socket
       hSetBuffering handle NoBuffering
       let newClient = Client clientIdx handle
       addClient newClient cRef
       sayHi newClient cRef
-      newThIdx <-
-        forkFinally (talk newClient cRef) (\_ -> finalize newClient cRef)
-      putStrLn $ "Forked thread " ++ show newThIdx
+      forkFinally (talk newClient cRef) (\_ -> finalize newClient cRef)
+
 
 -- | Run the chat server on a particular port. Lets us split out the
 -- port-finding function for testing.
@@ -128,9 +131,13 @@ chatOnPort port = withSocketsDo $ do
   chatLoop sock
 
 -- | Grab the preferred port to the environment.
-getPort :: IO Int
-getPort = getEnv "CHAT_SERVER_PORT" >>= return . read
+getPort :: IO (Maybe Int)
+getPort = lookupEnv "CHAT_SERVER_PORT" >>= return . fmap read
 
 -- | Entry point for the chat server.
 chat :: IO ()
-chat = getPort >>= chatOnPort
+chat = do
+  runPort <- getPort
+  case runPort of
+   Just p -> chatOnPort p
+   Nothing -> putStrLn "Environment variable CHAT_SERVER_PORT not set."

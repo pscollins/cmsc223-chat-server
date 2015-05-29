@@ -1,16 +1,17 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+-- | Author: Patrick Collins
+-- Purpose: to test Chat.hs
 module Main (main) where
 
-import Test.Hspec
-
-import System.IO.Temp
-import System.IO (hSeek, hIsOpen, hIsWritable, SeekMode(AbsoluteSeek))
-import System.IO.Error
-import Data.IORef
-import System.Directory
-import System.Posix.Env
 import Control.Concurrent
 import Control.Exception (bracket)
+import Data.IORef
+import System.Directory
+import System.IO (hSeek, hIsOpen, hIsWritable, SeekMode(AbsoluteSeek))
+import System.IO.Error
+import System.IO.Temp
+import System.Posix.Env
+import Test.Hspec
 
 import Chat
 
@@ -33,8 +34,8 @@ withTempClients idxs f = bracket beforeTest afterTest test
         afterTest   = (\(paths, _) -> mapM_ removeFile paths)
         test  = (\(_, handles) -> f $ zipWith Client idxs handles)
 
--- | Send a message to a client and rewind his mocked file handle, which we need to do
--- in order to read back what we wrote.
+-- | Send a message to a client and rewind his mocked file handle, which
+-- we need to do in order to read back what we wrote.
 tellClient' :: String -> Client -> IO ()
 tellClient' s c@(Client _ h) = tellClient s c >> hSeek h AbsoluteSeek 0
 
@@ -111,7 +112,7 @@ main = hspec $ describe "Testing Lab 2" $ do
   describe "find the port" $ do
     it "can read from the environment" $ do
       setEnv "CHAT_SERVER_PORT" "5050" True
-      getPort `shouldReturn` 5050
+      getPort `shouldReturn` Just 5050
 
   describe "talking between clients" $ do
     it "should talk to others" $ withThree $ \cs@[c1, c2, c3] -> do
@@ -126,5 +127,5 @@ main = hspec $ describe "Testing Lab 2" $ do
       tellClient' "hello world" c1
       _ <- forkIO $ talk c1 cRef
       threadDelay 1000
-      mapM_ (\(Client _ h) -> hSeek h AbsoluteSeek 0) cs
+      rewind cs
       mapM_ (\c -> askClient c `shouldReturn` "1: hello world") [c2, c3]
