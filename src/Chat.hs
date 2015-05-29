@@ -80,7 +80,11 @@ talk :: Client -> IORef [Client] -> IO ()
 talk me currentClients = doTalk
   where prefixMe = prefixMessage me
         everyoneElse = otherClients me
-        doTalk = forever $ talkAction prefixMe everyoneElse currentClients me
+        doTalk = forever $
+                 talkAction
+                 prefixMe
+                 everyoneElse
+                 currentClients me
 
 -- | Send a message to every other client
 tellAll :: String -> IORef [Client] -> IO ()
@@ -107,7 +111,10 @@ sayBye = sayWith $ sayForClient " has left"
 -- | Send the appropriate message for a client that has left and free
 -- up resources.
 finalize :: Client -> IORef [Client] -> IO ()
-finalize c@(Client _ hC) cRef = hClose hC >> removeClient c cRef >> sayBye c cRef
+finalize c@(Client _ hC) cRef =
+  hClose hC >>
+  removeClient c cRef >>
+  sayBye c cRef
 
 -- | Main loop for the chat server.
 chatLoop :: Socket -> IO ()
